@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2716,5 +2715,879 @@
         });
     </script>
 
+
+<!-- ================================================================
+     RELIEVE FUNERALS — BUILT-IN CHAT ASSISTANT
+     Self-contained. Reads this page's own content, builds a search
+     index, and answers visitor questions. No API key required.
+     ================================================================ -->
+<div class="rf-chat-root">
+
+    <button class="rf-launcher" id="rfLauncher" aria-label="Open chat assistant" aria-expanded="false">
+        <i class="fas fa-comment-dots" aria-hidden="true"></i>
+        <span class="rf-badge" id="rfBadge">1</span>
+    </button>
+
+    <div class="rf-panel" id="rfPanel" role="dialog" aria-modal="false"
+         aria-label="Relieve Funerals chat assistant" aria-hidden="true">
+
+        <div class="rf-header">
+            <div class="rf-avatar"><i class="fas fa-dove" aria-hidden="true"></i></div>
+            <div class="rf-header-text">
+                <strong>Relieve Assistant</strong>
+                <span><i class="rf-dot" aria-hidden="true"></i> Online &middot; usually replies instantly</span>
+            </div>
+            <button class="rf-close" id="rfClose" aria-label="Close chat">
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
+
+        <div class="rf-messages" id="rfMessages" role="log" aria-live="polite" aria-atomic="false"></div>
+
+        <div class="rf-chips" id="rfChips" aria-label="Suggested questions"></div>
+
+        <form class="rf-input-row" id="rfForm" autocomplete="off">
+            <label class="rf-sr-only" for="rfInput">Type your message</label>
+            <input type="text" id="rfInput" placeholder="Ask about services, pricing, location&hellip;" />
+            <button type="submit" aria-label="Send message"><i class="fas fa-paper-plane" aria-hidden="true"></i></button>
+        </form>
+
+        <div class="rf-footnote">
+            Urgent? Call <a href="tel:+256700123456" id="rfPhoneLink">+256 700 123 456</a> &mdash; available 24/7
+        </div>
+    </div>
+</div>
+
+<style>
+    /* ============ CHAT ASSISTANT STYLES ============ */
+    .rf-chat-root * { box-sizing: border-box; }
+
+    .rf-sr-only {
+        position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+        overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+
+    /* ---- Launcher ---- */
+    .rf-launcher {
+        position: fixed; right: 24px; bottom: 24px; z-index: 1200;
+        width: 62px; height: 62px; border-radius: 50%; border: none; cursor: pointer;
+        background: linear-gradient(135deg, #c9a96e 0%, #a8894e 100%);
+        color: #fff; font-size: 1.5rem; display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 12px 34px rgba(201,169,110,.45);
+        transition: all .32s cubic-bezier(.25,.46,.45,.94);
+    }
+    .rf-launcher:hover { transform: translateY(-3px) scale(1.05); }
+    .rf-launcher:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+    .rf-launcher.is-open {
+        background: linear-gradient(135deg, #2d2d2d 0%, #1e1e1e 100%);
+        box-shadow: 0 12px 34px rgba(0,0,0,.35);
+    }
+    .rf-launcher.is-open .fa-comment-dots::before { content: "\f00d"; }
+
+    .rf-badge {
+        position: absolute; top: -3px; right: -3px;
+        width: 21px; height: 21px; border-radius: 50%;
+        background: #e74c3c; color: #fff; font-size: .68rem; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        border: 2px solid #fff; transition: opacity .25s ease, transform .25s ease;
+    }
+    .rf-badge.is-hidden { opacity: 0; transform: scale(.4); pointer-events: none; }
+
+    /* ---- Panel ---- */
+    .rf-panel {
+        position: fixed; right: 24px; bottom: 100px; z-index: 1200;
+        width: 384px; max-width: calc(100vw - 32px);
+        height: min(620px, calc(100vh - 150px));
+        display: flex; flex-direction: column; overflow: hidden;
+        background: #fff; border-radius: 18px;
+        box-shadow: 0 30px 80px rgba(0,0,0,.30);
+        font-family: 'Lato', system-ui, -apple-system, sans-serif;
+        opacity: 0; visibility: hidden; transform: translateY(18px) scale(.98);
+        transition: opacity .3s ease, transform .3s cubic-bezier(.25,.46,.45,.94), visibility .3s;
+    }
+    .rf-panel.is-open { opacity: 1; visibility: visible; transform: translateY(0) scale(1); }
+
+    /* ---- Header ---- */
+    .rf-header {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 16px;
+        background: linear-gradient(135deg, #232323 0%, #1e1e1e 100%);
+        color: #fff; flex-shrink: 0;
+    }
+    .rf-avatar {
+        width: 42px; height: 42px; border-radius: 50%;
+        background: rgba(201,169,110,.16); border: 1px solid rgba(201,169,110,.35);
+        display: flex; align-items: center; justify-content: center;
+        color: #c9a96e; font-size: 1.15rem; flex-shrink: 0;
+    }
+    .rf-header-text { flex: 1; min-width: 0; line-height: 1.3; }
+    .rf-header-text strong {
+        display: block; font-family: 'Playfair Display', serif;
+        font-size: 1.02rem; font-weight: 600; letter-spacing: .2px;
+    }
+    .rf-header-text span {
+        display: flex; align-items: center; gap: 6px;
+        font-size: .74rem; color: rgba(255,255,255,.6); font-weight: 300;
+    }
+    .rf-dot {
+        width: 7px; height: 7px; border-radius: 50%; background: #4caf50;
+        box-shadow: 0 0 0 0 rgba(76,175,80,.7); animation: rfPulse 2s infinite;
+    }
+    @keyframes rfPulse {
+        0%   { box-shadow: 0 0 0 0 rgba(76,175,80,.6); }
+        70%  { box-shadow: 0 0 0 7px rgba(76,175,80,0); }
+        100% { box-shadow: 0 0 0 0 rgba(76,175,80,0); }
+    }
+    .rf-close {
+        background: rgba(255,255,255,.07); border: none; color: #fff;
+        width: 32px; height: 32px; border-radius: 50%; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .25s ease; flex-shrink: 0;
+    }
+    .rf-close:hover { background: rgba(255,255,255,.18); }
+
+    /* ---- Messages ---- */
+    .rf-messages {
+        flex: 1; overflow-y: auto; padding: 18px 16px 8px;
+        background: #faf7f0; display: flex; flex-direction: column; gap: 12px;
+        scroll-behavior: smooth;
+    }
+    .rf-messages::-webkit-scrollbar { width: 6px; }
+    .rf-messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,.14); border-radius: 3px; }
+
+    .rf-msg {
+        max-width: 86%; padding: 11px 15px; border-radius: 16px;
+        font-size: .91rem; line-height: 1.6; word-wrap: break-word; overflow-wrap: anywhere;
+        animation: rfMsgIn .32s ease both;
+    }
+    @keyframes rfMsgIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    .rf-msg.bot {
+        align-self: flex-start; background: #fff; color: #2d2d2d;
+        border-bottom-left-radius: 5px; box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+    .rf-msg.user {
+        align-self: flex-end; background: #c9a96e; color: #fff;
+        border-bottom-right-radius: 5px; box-shadow: 0 2px 12px rgba(201,169,110,.3);
+    }
+    .rf-msg a { color: #a8894e; font-weight: 700; }
+
+    /* Typing indicator */
+    .rf-typing { display: flex; gap: 5px; padding: 15px 17px; }
+    .rf-typing span {
+        width: 7px; height: 7px; border-radius: 50%; background: #c9a96e;
+        animation: rfBounce 1.3s infinite ease-in-out;
+    }
+    .rf-typing span:nth-child(2) { animation-delay: .18s; }
+    .rf-typing span:nth-child(3) { animation-delay: .36s; }
+    @keyframes rfBounce {
+        0%, 60%, 100% { transform: translateY(0); opacity: .45; }
+        30%           { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* Inline action button */
+    .rf-actions { align-self: flex-start; margin-top: -4px; }
+    .rf-action-btn {
+        background: #fff; border: 1px solid #e2d9c5; color: #a8894e;
+        font-weight: 700; font-size: .8rem; padding: 8px 16px; border-radius: 50px;
+        cursor: pointer; transition: all .25s ease; font-family: inherit;
+        box-shadow: 0 2px 10px rgba(0,0,0,.05);
+    }
+    .rf-action-btn:hover { background: #c9a96e; color: #fff; border-color: #c9a96e; }
+
+    /* ---- Quick reply chips ---- */
+    .rf-chips {
+        display: flex; gap: 8px; padding: 10px 14px;
+        overflow-x: auto; flex-shrink: 0; background: #faf7f0;
+        scrollbar-width: none;
+    }
+    .rf-chips::-webkit-scrollbar { display: none; }
+    .rf-chips:empty { display: none; }
+    .rf-chip {
+        white-space: nowrap; background: #fff; border: 1px solid #e6dcc6;
+        color: #6b5a36; font-size: .78rem; font-weight: 600;
+        padding: 7px 15px; border-radius: 50px; cursor: pointer;
+        transition: all .22s ease; font-family: inherit; flex-shrink: 0;
+    }
+    .rf-chip:hover { background: #c9a96e; color: #fff; border-color: #c9a96e; }
+
+    /* ---- Input ---- */
+    .rf-input-row {
+        display: flex; gap: 8px; padding: 10px 14px 12px;
+        background: #fff; border-top: 1px solid #efe8da; flex-shrink: 0;
+    }
+    .rf-input-row input {
+        flex: 1; border: 1px solid #e4ddd0; border-radius: 50px;
+        padding: 11px 18px; font-size: .9rem; font-family: inherit;
+        background: #faf7f0; color: #2d2d2d; transition: all .25s ease; min-width: 0;
+    }
+    .rf-input-row input:focus {
+        outline: none; border-color: #c9a96e; background: #fff;
+        box-shadow: 0 0 0 4px rgba(201,169,110,.14);
+    }
+    .rf-input-row button {
+        width: 44px; height: 44px; flex-shrink: 0; border: none; border-radius: 50%;
+        background: #c9a96e; color: #fff; font-size: .95rem; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        transition: all .25s ease;
+    }
+    .rf-input-row button:hover { background: #a8894e; transform: scale(1.06); }
+
+    .rf-footnote {
+        text-align: center; font-size: .7rem; color: #9b9384;
+        padding: 0 14px 10px; background: #fff; flex-shrink: 0;
+    }
+    .rf-footnote a { color: #a8894e; font-weight: 700; }
+
+    /* ---- Push "back to top" out of the way ---- */
+    .back-to-top { bottom: 102px !important; right: 30px !important; }
+
+    /* ---- Mobile ---- */
+    @media (max-width: 560px) {
+        .rf-launcher { right: 16px; bottom: 16px; width: 56px; height: 56px; font-size: 1.35rem; }
+        .rf-launcher.is-open { display: none; }
+        .rf-panel {
+            right: 0; left: 0; bottom: 0; width: 100%;
+            max-width: 100%; height: 84vh;
+            border-radius: 20px 20px 0 0;
+        }
+        .rf-msg { max-width: 90%; font-size: .89rem; }
+        .back-to-top { bottom: 86px !important; right: 16px !important; width: 44px !important; height: 44px !important; }
+    }
+</style>
+
+<script>
+/* ==================================================================
+   RELIEVE FUNERALS — BUILT-IN CHAT ASSISTANT (self-contained)
+   ------------------------------------------------------------------
+   1. Reads all visible text on the page (and its JSON-LD blocks)
+   2. Splits it into "chunks" keyed by heading
+   3. Builds a TF-IDF index over those chunks
+   4. Answers questions by retrieving + composing the best chunk
+   ================================================================== */
+(function () {
+    'use strict';
+
+    /* ==============================================================
+       0. SMALL HELPERS
+       ============================================================== */
+    const $  = (id) => document.getElementById(id);
+    const clean = (s) => (s || '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const escapeHtml = (s) => String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+
+    /* ==============================================================
+       1. BUSINESS FACTS — pulled straight from the page's JSON-LD
+       ============================================================== */
+    const BUSINESS = (function readBusiness() {
+        const info = {
+            name: 'Relieve Funerals',
+            phone: '+256 700 123 456',
+            phoneRaw: '+256700123456',
+            email: 'info@relievefunerals.com',
+            address: 'Kafeero Street, Mulago, Kampala, Uganda',
+            hours: 'Open 24 hours a day, 7 days a week'
+        };
+
+        document.querySelectorAll('script[type="application/ld+json"]').forEach(function (node) {
+            let data;
+            try { data = JSON.parse(node.textContent); } catch (e) { return; }
+            if (!data || data['@type'] !== 'LocalBusiness') return;
+
+            if (data.telephone) {
+                info.phone = String(data.telephone).replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+                info.phoneRaw = String(data.telephone).replace(/[^\d+]/g, '');
+            }
+            if (data.email) info.email = data.email;
+            if (data.openingHours) info.hours = 'Open 24 hours a day, 7 days a week';
+
+            const a = data.address;
+            if (a) {
+                info.address = [a.streetAddress, a.addressLocality, a.addressRegion, a.addressCountry]
+                    .filter(Boolean).join(', ');
+            }
+        });
+
+        return info;
+    })();
+
+    /* Keep the footer phone link in sync with the JSON-LD */
+    (function syncPhoneLink() {
+        const link = $('rfPhoneLink');
+        if (link) {
+            link.textContent = BUSINESS.phone;
+            link.setAttribute('href', 'tel:' + BUSINESS.phoneRaw);
+        }
+    })();
+
+    /* ==============================================================
+       2. SERVICES — read from the rendered service cards
+       ============================================================== */
+    const SERVICES = (function readServices() {
+        const out = [];
+        document.querySelectorAll('.service-card').forEach(function (card) {
+            const name  = clean(card.querySelector('h3') && card.querySelector('h3').textContent);
+            const price = clean(card.querySelector('.service-price') && card.querySelector('.service-price').textContent);
+            const desc  = clean(card.querySelector('p') && card.querySelector('p').textContent);
+            if (name) out.push({ name: name, price: price, desc: desc });
+        });
+        return out;
+    })();
+
+    /* ==============================================================
+       3. TOKENISER + LIGHT STEMMER
+       ============================================================== */
+    const STOPWORDS = new Set(('a,an,the,and,or,but,if,then,than,so,as,of,in,on,at,to,for,with,by,from,up,out,about,' +
+        'into,over,after,is,are,was,were,be,been,being,am,do,does,did,doing,have,has,had,having,will,would,shall,' +
+        'should,can,could,may,might,must,i,me,my,we,our,you,your,he,she,it,they,them,their,this,that,these,those,' +
+        'what,which,who,whom,when,where,why,how,please,tell,show,need,want,know,get,got,like,just,also,very,any,' +
+        'some,more,most,much,many,lot,us,let,there,here,now,do,you,re,ve,ll,d,m,t,s').split(','));
+
+    function stem(w) {
+        if (w.length > 4 && w.endsWith('ies')) return w.slice(0, -3) + 'y';
+        if (w.length > 4 && w.endsWith('es'))  return w.slice(0, -2);
+        if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1);
+        if (w.length > 5 && w.endsWith('ing')) w = w.slice(0, -3);
+        else if (w.length > 4 && w.endsWith('ed')) w = w.slice(0, -2);
+        if (w.length > 4 && w.endsWith('e')) w = w.slice(0, -1);
+        if (w.length > 3 && /([bdfglmnprt])\1$/.test(w)) w = w.slice(0, -1); // "plann" -> "plan"
+        return w;
+    }
+
+    function tokenize(str) {
+        return (str || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s'-]/g, ' ')
+            .split(/\s+/)
+            .map(function (t) { return t.replace(/^['-]+|['-]+$/g, ''); })
+            .filter(function (t) { return t.length > 2 && !STOPWORDS.has(t); })
+            .map(stem);
+    }
+
+    /* ==============================================================
+       4. KNOWLEDGE BASE — extracted from the live DOM
+       ============================================================== */
+    const PAGE_TITLES = {
+        home: 'Home', about: 'About Us', services: 'Our Services',
+        contact: 'Contact Us', blog: 'Blog'
+    };
+    function pageLabel(page) {
+        if (PAGE_TITLES[page]) return PAGE_TITLES[page];
+        if (/^blog-\d+$/.test(page)) return 'the full article';
+        return 'the page';
+    }
+
+    function buildChunks() {
+        const raw = [];
+
+        /* -- 4a. Visible content of every page section --------------- */
+        document.querySelectorAll('.page-section').forEach(function (section) {
+            const pageId = section.id.replace(/^page-/, '');
+            let current = null;
+
+            section.querySelectorAll('h1, h2, h3, h4, p, li').forEach(function (el) {
+                /* skip chrome, forms, our own widget and decorative media */
+                if (el.closest('.rf-chat-root, footer, header, form, .back-to-top, .hero-badge, .hero-stats, .map-container, .blog-featured-img, .quote-icon')) return;
+                /* skip <p> nested inside <li> (avoids duplicates) */
+                if (el.tagName !== 'LI' && el.closest('li')) return;
+                /* skip "read more" style anchors */
+                if (el.tagName === 'P' && !clean(el.textContent)) return;
+
+                const text = clean(el.textContent);
+                if (!text || text.length < 3) return;
+
+                const isHeading = /^H[1-4]$/.test(el.tagName);
+                const isNumeric = /^[\d\s%+.,\-–—]+$/.test(text);
+
+                if (isHeading && !isNumeric && text.length >= 4) {
+                    current = { page: pageId, title: text, parts: [text] };
+                    raw.push(current);
+                } else {
+                    if (!current) {
+                        current = { page: pageId, title: pageLabel(pageId), parts: [] };
+                        raw.push(current);
+                    }
+                    current.parts.push(text);
+                }
+            });
+        });
+
+        /* -- 4b. FAQ entries from the JSON-LD block ------------------ */
+        document.querySelectorAll('script[type="application/ld+json"]').forEach(function (node) {
+            let data;
+            try { data = JSON.parse(node.textContent); } catch (e) { return; }
+            if (!data || data['@type'] !== 'FAQPage' || !Array.isArray(data.mainEntity)) return;
+
+            data.mainEntity.forEach(function (q) {
+                const question = clean(q.name);
+                const answer = clean(q.acceptedAnswer && q.acceptedAnswer.text);
+                if (question && answer) {
+                    raw.push({
+                        page: 'contact',
+                        title: question,
+                        parts: [question + '. ' + answer]
+                    });
+                }
+            });
+        });
+
+        /* -- 4c. Finalise: dedupe, tokenise, index ------------------- */
+        const chunks = [];
+        const seen = new Set();
+
+        raw.forEach(function (c) {
+            const text = clean(c.parts.join(' '));
+            if (text.length < 30) return;
+
+            const fingerprint = text.slice(0, 110).toLowerCase();
+            if (seen.has(fingerprint)) return;
+            seen.add(fingerprint);
+
+            const tf = Object.create(null);
+            tokenize(text).forEach(function (t) { tf[t] = (tf[t] || 0) + 1; });
+
+            const titleTf = Object.create(null);
+            tokenize(c.title).forEach(function (t) { titleTf[t] = (titleTf[t] || 0) + 1; });
+
+            chunks.push({
+                page: c.page,
+                title: c.title,
+                text: text,
+                lower: text.toLowerCase(),
+                tf: tf,
+                titleTf: titleTf
+            });
+        });
+
+        /* -- 4d. Inverse document frequency -------------------------- */
+        const df = Object.create(null);
+        chunks.forEach(function (c) {
+            Object.keys(c.tf).forEach(function (t) { df[t] = (df[t] || 0) + 1; });
+        });
+        const N = chunks.length || 1;
+        const idf = Object.create(null);
+        Object.keys(df).forEach(function (t) { idf[t] = Math.log(1 + N / df[t]); });
+
+        return { chunks: chunks, idf: idf };
+    }
+
+    const KB = buildChunks();
+
+    /* ==============================================================
+       5. SEARCH — TF-IDF retrieval with phrase + title boosting
+       ============================================================== */
+    function search(query) {
+        const qTerms = Array.from(new Set(tokenize(query)));
+        if (!qTerms.length) return null;
+
+        const normQuery = query.toLowerCase().trim();
+        let best = null;
+
+        KB.chunks.forEach(function (chunk) {
+            let score = 0;
+            let matched = 0;
+
+            qTerms.forEach(function (term) {
+                const inBody  = chunk.tf[term] || 0;
+                const inTitle = chunk.titleTf[term] || 0;
+                if (!inBody && !inTitle) return;
+
+                const weight = KB.idf[term] || 1;
+                matched += 1;
+                score += (1 + Math.log(1 + inBody)) * weight;
+                score += inTitle * 2.2 * weight;
+            });
+
+            if (!matched) return;
+
+            /* exact phrase bonus for short queries */
+            if (normQuery.length > 3 && chunk.lower.indexOf(normQuery) !== -1) score += 3.5;
+
+            /* mild length normalisation so short chunks aren't drowned out */
+            const normalised = score / Math.sqrt(qTerms.length);
+
+            if (!best || normalised > best.score) {
+                best = { chunk: chunk, score: normalised, matched: matched, total: qTerms.length };
+            }
+        });
+
+        return best;
+    }
+
+    /* ==============================================================
+       6. INTENT RULES — instant, high-confidence answers
+       ============================================================== */
+    const RULES = [
+        {
+            test: /^\s*(hi|hey|hello|yo|good\s*(morning|afternoon|evening|day))\b/i,
+            reply: function () {
+                return {
+                    text: 'Hello, and thank you for reaching out to ' + BUSINESS.name + '.\n\n' +
+                          'I can help you with our services, pricing, location, opening hours, ' +
+                          'pre-planning or grief support. What would you like to know?',
+                    chips: ['What services do you offer?', 'How much does it cost?',
+                            'Where are you located?', 'Are you available 24/7?']
+                };
+            }
+        },
+        {
+            test: /\b(thanks|thank\s*you|thankyou|appreciate|grateful)\b/i,
+            reply: function () {
+                return {
+                    text: 'You are very welcome. If there is anything else you need — today or later — ' +
+                          'we are here for you, day and night.',
+                    chips: ['Contact us', 'Grief support']
+                };
+            }
+        },
+        {
+            test: /\b(bye|goodbye|see\s*you|later|that'?s\s*all)\b/i,
+            reply: function () {
+                return {
+                    text: 'Take care of yourself, and please reach out any time. Our team is available 24/7 ' +
+                          'on ' + BUSINESS.phone + '.',
+                    chips: []
+                };
+            }
+        },
+        {
+            test: /\b(speak|talk|chat)\s*(to|with)?\s*(a|an)?\s*(human|person|agent|someone|staff|team|representative)\b|\bcall\s*me\b/i,
+            reply: function () {
+                return {
+                    text: 'Of course — I will connect you with our team.\n\n' +
+                          '📞 ' + BUSINESS.phone + ' (24/7)\n' +
+                          '✉️ ' + BUSINESS.email + '\n' +
+                          '📍 ' + BUSINESS.address,
+                    chips: ['Open contact page'],
+                    link: { label: 'Open contact page', page: 'contact' }
+                };
+            }
+        },
+        {
+            test: /\b(urgent|emergency|immediately|right\s*now|asap|passed\s*away|just\s*died|death\s*in|bereave)/i,
+            reply: function () {
+                return {
+                    text: 'I am so sorry. Please call us right away — we answer 24 hours a day, 7 days a week.\n\n' +
+                          '📞 ' + BUSINESS.phone + '\n\n' +
+                          'A member of our team will guide you through every step, immediately.',
+                    chips: ['Where are you located?', 'What services do you offer?'],
+                    link: { label: 'Call now', tel: BUSINESS.phoneRaw }
+                };
+            }
+        },
+        {
+            test: /\b(hour|hours|open|opening|close|closing|what\s*time|available\s*24|24\s*\/?\s*7|24\s*hours)\b/i,
+            reply: function () {
+                return {
+                    text: 'We are available ' + BUSINESS.hours.toLowerCase() + ' — including public holidays.\n\n' +
+                          'Call us any time on ' + BUSINESS.phone + '.',
+                    chips: ['Where are you located?', 'Contact us']
+                };
+            }
+        },
+        {
+            test: /\b(phone|number|call|telephone|contact\s*(details|info)?|reach\s*you)\b/i,
+            reply: function () {
+                return {
+                    text: 'Here is how to reach us:\n\n' +
+                          '📞 ' + BUSINESS.phone + ' (24/7)\n' +
+                          '✉️ ' + BUSINESS.email + '\n' +
+                          '📍 ' + BUSINESS.address,
+                    chips: ['Where are you located?', 'What services do you offer?'],
+                    link: { label: 'Open contact page', page: 'contact' }
+                };
+            }
+        },
+        {
+            test: /\b(email|e-mail|mail\s*address)\b/i,
+            reply: function () {
+                return {
+                    text: 'You can email us at ' + BUSINESS.email + '.\n\n' +
+                          'For anything urgent, please call ' + BUSINESS.phone + ' — we answer 24/7.',
+                    chips: ['Where are you located?'],
+                    link: { label: 'Open contact page', page: 'contact' }
+                };
+            }
+        },
+        {
+            test: /\b(where|location|located|address|direction|find\s*you|map|office|premises|situated)\b/i,
+            reply: function () {
+                return {
+                    text: 'We are located at:\n\n📍 ' + BUSINESS.address + '\n\n' +
+                          'We serve families throughout Kampala and across Uganda.',
+                    chips: ['Open contact page', 'Are you available 24/7?'],
+                    link: { label: 'Open contact page', page: 'contact' }
+                };
+            }
+        },
+        {
+            test: /\b(price|prices|pricing|cost|costs|how\s*much|fee|fees|charge|charges|rate|rates|budget|afford|quote)\b/i,
+            reply: function () {
+                if (!SERVICES.length) return null;
+                let txt = 'Here is an overview of our pricing:\n';
+                SERVICES.forEach(function (s) {
+                    txt += '\n• ' + s.name + (s.price ? ' — ' + s.price : '');
+                });
+                txt += '\n\nFinal costs depend on the choices you make. We believe in completely transparent ' +
+                       'pricing with no hidden fees — call ' + BUSINESS.phone + ' for a personalised quote.';
+                return {
+                    text: txt,
+                    chips: ['What services do you offer?', 'Do you offer pre-planning?'],
+                    link: { label: 'See all services', page: 'services' }
+                };
+            }
+        },
+        {
+            test: /\b(what|which)\s+(services|do you offer|do you provide|options)|services\s+(do|you)\b|list\s*(of)?\s*services/i,
+            reply: function () {
+                let txt = 'We offer the following services:\n';
+                if (SERVICES.length) {
+                    SERVICES.forEach(function (s) {
+                        txt += '\n• ' + s.name + (s.price ? ' — ' + s.price : '');
+                    });
+                } else {
+                    txt += '\n• Traditional Burial Services\n• Cremation Services\n• Memorial & Celebration of Life\n' +
+                           '• Pre-Planning & Pre-Payment\n• Transportation Services\n• Grief Support & Counseling';
+                }
+                txt += '\n\nWould you like details on any of these?';
+                return {
+                    text: txt,
+                    chips: ['How much does it cost?', 'Do you offer cremation?',
+                            'Do you offer pre-planning?', 'Grief support'],
+                    link: { label: 'See all services', page: 'services' }
+                };
+            }
+        }
+    ];
+
+    /* ==============================================================
+       7. RESPONSE COMPOSER
+       ============================================================== */
+    function answerFromChunk(chunk) {
+        let text = chunk.text;
+
+        if (text.length > 640) {
+            text = text.slice(0, 640).replace(/\s+\S*$/, '') + '…';
+        }
+
+        /* Give the answer a natural lead-in when it reads like a fragment */
+        if (text.length < 120 && chunk.title && text.indexOf(chunk.title) !== 0) {
+            text = chunk.title + ': ' + text;
+        }
+
+        const label = pageLabel(chunk.page);
+        const isArticle = /^blog-\d+$/.test(chunk.page);
+
+        return {
+            text: text,
+            chips: ['How much does it cost?', 'Where are you located?', 'Contact us'],
+            link: { label: isArticle ? 'Read the full article' : 'View ' + label, page: chunk.page }
+        };
+    }
+
+    function fallbackReply() {
+        return {
+            text: 'I am sorry — I could not find a clear answer to that on our website.\n\n' +
+                  'Our team can help you directly:\n' +
+                  '📞 ' + BUSINESS.phone + ' (24/7)\n' +
+                  '✉️ ' + BUSINESS.email + '\n' +
+                  '📍 ' + BUSINESS.address,
+            chips: ['What services do you offer?', 'How much does it cost?', 'Contact us'],
+            link: { label: 'Open contact page', page: 'contact' }
+        };
+    }
+
+    function respond(query) {
+        const q = clean(query);
+        if (!q) return null;
+
+        /* 1 — intent rules first */
+        for (let i = 0; i < RULES.length; i++) {
+            if (RULES[i].test.test(q)) {
+                const r = RULES[i].reply();
+                if (r) return r;
+            }
+        }
+
+        /* 2 — knowledge-base retrieval */
+        const best = search(q);
+
+        if (!best) return fallbackReply();
+
+        const coverage = best.matched / best.total;
+        if (best.score < 1.15 || coverage < 0.25) return fallbackReply();
+
+        return answerFromChunk(best.chunk);
+    }
+
+    /* ==============================================================
+       8. UI WIRING
+       ============================================================== */
+    const launcher = $('rfLauncher');
+    const panel    = $('rfPanel');
+    const closeBtn = $('rfClose');
+    const messages = $('rfMessages');
+    const chipsBox = $('rfChips');
+    const form     = $('rfForm');
+    const input    = $('rfInput');
+    const badge    = $('rfBadge');
+
+    let isOpen = false;
+    let greeted = false;
+    let busy = false;
+
+    function scrollToBottom() {
+        requestAnimationFrame(function () {
+            messages.scrollTop = messages.scrollHeight;
+        });
+    }
+
+    function setChips(list) {
+        chipsBox.innerHTML = '';
+        (list || []).forEach(function (label) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'rf-chip';
+            b.textContent = label;
+            b.addEventListener('click', function () { sendMessage(label); });
+            chipsBox.appendChild(b);
+        });
+    }
+
+    function addMessage(role, text) {
+        const el = document.createElement('div');
+        el.className = 'rf-msg ' + role;
+        el.innerHTML = escapeHtml(text).replace(/\n/g, '<br>');
+        messages.appendChild(el);
+        scrollToBottom();
+        return el;
+    }
+
+    function addActionButton(link) {
+        if (!link) return;
+        const row = document.createElement('div');
+        row.className = 'rf-actions';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'rf-action-btn';
+        btn.innerHTML = escapeHtml(link.label) + ' <i class="fas fa-arrow-right" aria-hidden="true"></i>';
+
+        btn.addEventListener('click', function () {
+            if (link.tel) {
+                window.location.href = 'tel:' + link.tel;
+                return;
+            }
+            if (link.page && typeof window.navigateTo === 'function') {
+                window.navigateTo(link.page);
+                closePanel();
+            }
+        });
+
+        row.appendChild(btn);
+        messages.appendChild(row);
+        scrollToBottom();
+    }
+
+    function showTyping() {
+        const el = document.createElement('div');
+        el.className = 'rf-msg bot rf-typing';
+        el.innerHTML = '<span></span><span></span><span></span>';
+        messages.appendChild(el);
+        scrollToBottom();
+        return el;
+    }
+
+    function pushBot(payload) {
+        if (!payload) return;
+        addMessage('bot', payload.text);
+        addActionButton(payload.link);
+        setChips(payload.chips);
+    }
+
+    function sendMessage(rawText) {
+        const text = clean(rawText);
+        if (!text || busy) return;
+
+        addMessage('user', text);
+        input.value = '';
+        setChips([]);
+        busy = true;
+
+        const typing = showTyping();
+        const delay = 420 + Math.random() * 480;
+
+        setTimeout(function () {
+            typing.remove();
+            busy = false;
+            pushBot(respond(text));
+        }, delay);
+    }
+
+    function openPanel() {
+        isOpen = true;
+        panel.classList.add('is-open');
+        panel.setAttribute('aria-hidden', 'false');
+        launcher.classList.add('is-open');
+        launcher.setAttribute('aria-expanded', 'true');
+        badge.classList.add('is-hidden');
+
+        if (!greeted) {
+            greeted = true;
+            setTimeout(function () {
+                pushBot({
+                    text: 'Welcome to ' + BUSINESS.name + '. I am here to help you, any time.\n\n' +
+                          'Ask me anything about our services, pricing, location, or the support we offer families.',
+                    chips: ['What services do you offer?', 'How much does it cost?',
+                            'Where are you located?', 'Are you available 24/7?']
+                });
+            }, 400);
+        }
+
+        setTimeout(function () { input.focus(); }, 320);
+    }
+
+    function closePanel() {
+        isOpen = false;
+        panel.classList.remove('is-open');
+        panel.setAttribute('aria-hidden', 'true');
+        launcher.classList.remove('is-open');
+        launcher.setAttribute('aria-expanded', 'false');
+    }
+
+    /* ---- Events ---- */
+    launcher.addEventListener('click', function () {
+        isOpen ? closePanel() : openPanel();
+    });
+
+    closeBtn.addEventListener('click', closePanel);
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        sendMessage(input.value);
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && isOpen) closePanel();
+    });
+
+    /* close on outside click (desktop only) */
+    document.addEventListener('click', function (e) {
+        if (!isOpen) return;
+        if (window.innerWidth <= 560) return;
+        if (panel.contains(e.target) || launcher.contains(e.target)) return;
+        closePanel();
+    });
+
+})();
+</script>
+
 </body>
-</html>﻿
+</html>
